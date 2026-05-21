@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: rocket-smartsheet-tickets
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: APP_SECRET_KEY
+        generateValue: true
+      - key: CACHE_TTL_SECONDS
+        value: "300"
+      - key: SMARTSHEET_BASE_URL
+        value: https://api.smartsheet.com/2.0
+      - key: SMARTSHEET_ACCESS_TOKEN
+        sync: false
+      - key: SMARTSHEET_SHEET_ID
+        sync: false
+      - key: SMARTSHEET_WEB_URL
+        value: https://app.smartsheet.com/sheets/4mxRwjJvcm57HJ6hwxcgVFhF799qcHM6FxMxw2C1?view=grid&newview=true&filterId=1922378880733060
+      - key: DEFAULT_RESPONSIBLE
+        sync: false
+      - key: ENABLE_SMARTSHEET_WRITE
+        value: "false"

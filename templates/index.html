@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chamados TI - Smartsheet → Rocket.Chat</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --bg: #0b0f19;
+      --panel: #121a2b;
+      --panel-2: #0d1424;
+      --line: #2a3a60;
+      --line-2: #243252;
+      --text: #e7eaf0;
+      --muted: #a8b5c8;
+      --blue: #2b63ff;
+      --blue-2: #2a3a60;
+      --red: #b72f4a;
+      --green: #1f8b59;
+      --yellow: #ffd58f;
+
+      /* AJUSTE AQUI O TAMANHO PADRÃO DOS CAMPOS DOS CHAMADOS
+         Aumente/diminua esses valores para regular a tela inteira. */
+      --ticket-field-min-width: 150px;
+      --ticket-field-height: 88px;
+      --ticket-value-lines: 3;
+    }
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+    .wrap { width: min(1880px, calc(100vw - 32px)); max-width: none; margin: 0 auto; padding: 18px 0; }
+    h1 { margin: 0 0 12px; font-size: 24px; }
+    .top { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: stretch; }
+    .card { background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.22); }
+    .filters { display:grid; grid-template-columns: minmax(260px, 1.05fr) .55fr .55fr 1fr auto auto; gap: 10px; align-items: end; }
+    label { display:block; font-size: 12px; opacity:.9; margin-bottom: 5px; }
+    select, input[type="text"], .multi-toggle { width:100%; border-radius:12px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); padding:10px; }
+    button, .btn { background: var(--blue); border: none; color:white; padding:10px 12px; border-radius:12px; cursor:pointer; text-decoration:none; display:inline-block; font-size: 14px; }
+    button.secondary, .btn.secondary { background: var(--blue-2); }
+    button.danger, .btn.danger { background: var(--red); }
+    .hint { opacity:.86; font-size: 13px; line-height: 1.45; }
+    .tag { font-size: 12px; padding: 4px 8px; border-radius: 999px; background:var(--panel-2); border:1px solid var(--line); opacity:.95; display:inline-block; }
+    .source-card { min-height: 100%; display:flex; flex-direction:column; justify-content:center; }
+    .source-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+    .source-head strong { white-space:nowrap; }
+    .stats { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+    .stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px; min-height: 58px; }
+    .stat b { display:block; font-size: 17px; line-height:1.05; }
+    .stat span { display:block; font-size: 11px; line-height:1.2; margin-top: 4px; }
+    .flash { background:#203055; border:1px solid var(--line); padding:10px; border-radius:12px; margin: 10px 0; }
+    .error { background:#3a1722; border-color:#7a3144; }
+    .muted { color: var(--muted); }
+
+    .multi-select { position: relative; }
+    .multi-toggle { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height: 42px; cursor:pointer; text-align:left; }
+    .multi-toggle span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .multi-toggle::after { content: "▾"; color: var(--muted); flex:0 0 auto; }
+    .multi-panel { display:none; position:absolute; z-index:30; top: calc(100% + 6px); left:0; right:0; background: var(--panel-2); border:1px solid var(--line); border-radius:12px; max-height: 280px; overflow:auto; padding:8px; box-shadow:0 16px 40px rgba(0,0,0,.45); }
+    .multi-select.open .multi-panel { display:block; }
+    .check-row { display:flex; align-items:center; gap:8px; padding:8px; border-radius:8px; cursor:pointer; margin:0; font-size:13px; opacity:1; }
+    .check-row:hover { background: rgba(255,255,255,.045); }
+    .check-row input { accent-color: var(--blue); }
+    .check-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    .ticket-list { display:grid; gap:12px; margin-top: 14px; }
+    .ticket-card { background: var(--panel); border:1px solid var(--line-2); border-radius:14px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.18); }
+    .ticket-card.needs-attention { border-color: rgba(255,213,143,.75); box-shadow:0 0 0 1px rgba(255,213,143,.22), 0 10px 30px rgba(0,0,0,.22); }
+    .ticket-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+    .ticket-title { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ticket-number { font-weight:850; font-size:17px; letter-spacing:.1px; }
+    .attention-label { color:#171102; background:var(--yellow); border-color: rgba(255,213,143,.85); font-weight:800; }
+    .demand-internal { border-color: rgba(255,213,143,.55); color:#ffd58f; }
+    .demand-external { border-color: rgba(168,181,200,.35); color:#d8e0ff; }
+    .ticket-fields { display:grid; grid-template-columns: repeat(auto-fit, minmax(var(--ticket-field-min-width), 1fr)); gap:8px; }
+    .ticket-field { min-height: var(--ticket-field-height); max-height: var(--ticket-field-height); overflow:hidden; background:var(--panel-2); border:1px solid var(--line-2); border-radius:12px; padding:8px; }
+    .ticket-field.actions-field { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
+    .field-label { display:block; color:#d7def0; opacity:.78; font-size:11px; font-weight:700; margin-bottom:5px; }
+    .field-value { display:-webkit-box; -webkit-line-clamp: var(--ticket-value-lines); -webkit-box-orient: vertical; overflow:hidden; word-break:break-word; font-size:13px; line-height:1.35; }
+    .priority { font-weight:700; }
+    .priority.altissima, .priority.altíssima { color:#ffb4c4; }
+    .priority.alta { color:#ffd58f; }
+    .priority.media, .priority.média { color:#d8e0ff; }
+    .status { white-space: nowrap; }
+    .actions { display:flex; gap: 8px; flex-wrap: wrap; justify-content:center; }
+
+    .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.62); z-index:50; align-items:center; justify-content:center; padding: 18px; }
+    .modal { width:min(980px, 96vw); max-height: 86vh; overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow:0 20px 80px rgba(0,0,0,.45); }
+    .modal-header { display:flex; justify-content: space-between; gap:12px; align-items:center; border-bottom:1px solid var(--line-2); padding-bottom:10px; margin-bottom: 12px; }
+    .modal h2 { margin:0; font-size: 18px; }
+    .detail-grid { display:grid; grid-template-columns: 210px 1fr; gap: 0; border:1px solid var(--line-2); border-radius:12px; overflow:hidden; }
+    .detail-grid div { padding: 9px 10px; border-bottom:1px solid var(--line-2); }
+    .detail-grid div:nth-child(odd) { background: var(--panel-2); font-weight: 700; color:#d5dcef; }
+    .detail-grid div:nth-child(even) { white-space: pre-wrap; word-break: break-word; }
+    .detail-grid div:nth-last-child(-n+2) { border-bottom:none; }
+    @media (max-width: 1250px) {
+      .top { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    @media (max-width: 1000px) {
+      .filters { grid-template-columns: 1fr; }
+      .wrap { width: min(100% - 20px, 100%); padding: 12px 0; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Chamados TI <span class="muted">(Smartsheet → Rocket.Chat)</span></h1>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}<div class="flash">{{ messages[0] }}</div>{% endif %}
+    {% endwith %}
+    {% if error %}<div class="flash error"><b>Atenção:</b> {{ error }}</div>{% endif %}
+
+    <div class="top">
+      <div class="card">
+        <form method="get" action="{{ url_for('index') }}" class="filters" id="filterForm">
+          <div>
+            <label>Responsável</label>
+            <div class="multi-select" id="responsibleDropdown">
+              <button type="button" class="multi-toggle" onclick="toggleResponsibleDropdown(event)"><span id="responsibleSummary">Responsável</span></button>
+              <div class="multi-panel">
+                {% for key, label in options %}
+                  <label class="check-row">
+                    <input type="checkbox" name="responsible" value="{{ key }}" data-label="{{ label }}" {% if key in responsibles %}checked{% endif %}>
+                    <span class="check-text">{{ label }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          <div>
+            <label>Status</label>
+            <select name="status">
+              <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos</option>
+              <option value="open" {% if status_filter == 'open' %}selected{% endif %}>Não resolvidos</option>
+              <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Resolvidos/fechados</option>
+            </select>
+          </div>
+          <div>
+            <label>Tipo de demanda</label>
+            <select name="demand_type">
+              <option value="all" {% if demand_type == 'all' %}selected{% endif %}>Todas</option>
+              <option value="internal" {% if demand_type == 'internal' %}selected{% endif %}>Interna</option>
+              <option value="external" {% if demand_type == 'external' %}selected{% endif %}>Externa</option>
+            </select>
+          </div>
+          <div>
+            <label>Buscar</label>
+            <input type="text" name="q" value="{{ search }}" placeholder="ticket, e-mail, categoria, patrimônio..." />
+          </div>
+          <input type="hidden" name="per_page" value="{{ pagination.per_page }}" />
+          <button type="submit">Filtrar</button>
+          <a class="btn secondary" href="{{ url_for('index', responsible=responsibles, status=status_filter, demand_type=demand_type, q=search, per_page=pagination.per_page, page=pagination.page, refresh=1) }}">Recarregar</a>
+        </form>
+        <div class="hint" style="margin-top: 10px;">
+          A lista de responsáveis considera apenas chamados não resolvidos. Use <b>Tipo de demanda</b> para ver demandas internas ou externas. Chamados preenchidos como <b>Não atribuído</b> aparecem no topo para todos os responsáveis. Campo <b>Atribuído a</b> vazio não entra na contagem/filtro de Não atribuído.
+        </div>
+      </div>
+
+      <div class="card source-card">
+        <div class="source-head">
+          <strong>Status da fonte</strong>
+          <div class="hint">Fonte: <span class="tag">{{ source }}</span> &nbsp; Versão: <span class="tag">{{ app_version }}</span> &nbsp; Auto-refresh: <span class="tag">60s</span></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><b>{{ stats.total }}</b><span class="muted">chamados carregados</span></div>
+          <div class="stat"><b>{{ stats.open }}</b><span class="muted">não resolvidos</span></div>
+          <div class="stat"><b>{{ stats.filtered }}</b><span class="muted">no filtro atual</span></div>
+          <div class="stat"><b>{{ stats.unassigned }}</b><span class="muted">não atribuídos abertos</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div class="hint">Mostrando página <b>{{ pagination.page }}</b> de <b>{{ pagination.total_pages }}</b> · {{ pagination.total_filtered }} chamados no filtro.</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        {% if pagination.page > 1 %}
+          <a class="btn secondary" href="{{ url_for('index', responsible=responsibles, status=status_filter, demand_type=demand_type, q=search, per_page=pagination.per_page, page=pagination.page-1) }}">Anterior</a>
+        {% endif %}
+        {% if pagination.page < pagination.total_pages %}
+          <a class="btn secondary" href="{{ url_for('index', responsible=responsibles, status=status_filter, demand_type=demand_type, q=search, per_page=pagination.per_page, page=pagination.page+1) }}">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ticket-list">
+      {% for t in tickets %}
+        <section class="ticket-card {% if t.is_attention_unassigned %}needs-attention{% endif %}">
+          <div class="ticket-head">
+            <div class="ticket-title">
+              <span class="ticket-number">{{ t.ticket_number }}</span>
+              {% if t.is_attention_unassigned %}<span class="tag attention-label">Não atribuído</span>{% endif %}
+              <span class="tag status">{{ t.status or '-' }}</span>
+              <span class="tag {% if t.is_internal_demand %}demand-internal{% else %}demand-external{% endif %}">{{ t.demand_type_label }}</span>
+            </div>
+            <div class="actions">
+              <button class="secondary" type="button" onclick='showDetails({{ t.detail_fields()|tojson }}, {{ t.ticket_number|tojson }})'>Ver detalhes</button>
+              <a class="btn" href="{{ url_for('ticket_messages', uid=t.uid, return_to=return_to) }}">Mensagens</a>
+            </div>
+          </div>
+          <div class="ticket-fields">
+            <div class="ticket-field">
+              <span class="field-label">Prioridade</span>
+              <span class="field-value priority {{ t.priority|lower }}">{{ t.priority or '-' }}</span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Ticket</span>
+              <span class="field-value"><b>{{ t.ticket_number }}</b></span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Atribuído a</span>
+              <span class="field-value">{{ t.assigned_to or '-' }}</span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Enviado por</span>
+              <span class="field-value">{{ t.requester or '-' }}</span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Categoria</span>
+              <span class="field-value">{{ t.v('category') or '-' }}</span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Descrição da solicitação ou problema</span>
+              <span class="field-value">{{ t.v('description') or '-' }}</span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Passos de reprodução do problema</span>
+              <span class="field-value">{{ t.v('steps') or '-' }}</span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Unidade</span>
+              <span class="field-value">{{ t.v('unit') or '-' }}</span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Centro de Custo</span>
+              <span class="field-value">{{ t.v('cost_center') or '-' }}</span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Patrimônio</span>
+              <span class="field-value">{{ t.v('asset_number') or '-' }}</span>
+            </div>
+            <div class="ticket-field">
+              <span class="field-label">Criado em</span>
+              <span class="field-value">{{ t.v('created_at') or '-' }}</span>
+            </div>
+          </div>
+        </section>
+      {% else %}
+        <div class="card muted">Nenhum chamado encontrado para o filtro atual.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop" onclick="hideDetails(event)">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2 id="modalTitle">Detalhes do chamado</h2>
+        <button type="button" class="secondary" onclick="closeModal()">Fechar</button>
+      </div>
+      <div class="detail-grid" id="detailGrid"></div>
+    </div>
+  </div>
+
+<script>
+function toggleResponsibleDropdown(event){
+  event.stopPropagation();
+  document.getElementById('responsibleDropdown').classList.toggle('open');
+}
+function updateResponsibleSummary(){
+  const dropdown = document.getElementById('responsibleDropdown');
+  const checks = Array.from(dropdown.querySelectorAll('input[name="responsible"]'));
+  const checked = checks.filter(c => c.checked);
+  const summary = document.getElementById('responsibleSummary');
+  if(!checked.length){
+    const all = checks.find(c => c.value === '__all__');
+    if(all){ all.checked = true; summary.textContent = 'Todos'; return; }
+  }
+  const allChecked = checked.find(c => c.value === '__all__');
+  if(allChecked){ summary.textContent = 'Todos'; return; }
+  const labels = checked.map(c => c.dataset.label || c.value);
+  if(labels.length <= 2){ summary.textContent = labels.join(', '); }
+  else { summary.textContent = labels.slice(0, 2).join(', ') + ' +' + (labels.length - 2); }
+}
+document.addEventListener('click', (event) => {
+  const dropdown = document.getElementById('responsibleDropdown');
+  if(dropdown && !dropdown.contains(event.target)){ dropdown.classList.remove('open'); }
+});
+document.querySelectorAll('#responsibleDropdown input[name="responsible"]').forEach((input) => {
+  input.addEventListener('change', () => {
+    const checks = Array.from(document.querySelectorAll('#responsibleDropdown input[name="responsible"]'));
+    const all = checks.find(c => c.value === '__all__');
+    if(input.value === '__all__' && input.checked){
+      checks.forEach(c => { if(c.value !== '__all__') c.checked = false; });
+    } else if(input.checked && all){
+      all.checked = false;
+    }
+    updateResponsibleSummary();
+  });
+});
+updateResponsibleSummary();
+
+function showDetails(details, ticket){
+  const grid = document.getElementById('detailGrid');
+  const title = document.getElementById('modalTitle');
+  title.textContent = 'Detalhes do chamado ' + (ticket || '');
+  grid.innerHTML = '';
+  if(!details || !details.length){
+    details = [['Aviso', 'Não há detalhes disponíveis para este chamado.']];
+  }
+  details.forEach(([label, value]) => {
+    const k = document.createElement('div');
+    const v = document.createElement('div');
+    k.textContent = label;
+    v.textContent = value || '-';
+    grid.appendChild(k);
+    grid.appendChild(v);
+  });
+  document.getElementById('modalBackdrop').style.display = 'flex';
+}
+function closeModal(){ document.getElementById('modalBackdrop').style.display = 'none'; }
+function hideDetails(event){ if(event.target.id === 'modalBackdrop') closeModal(); }
+document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeModal(); });
+
+const AUTO_REFRESH_MS = 60000;
+function shouldDeferAutoRefresh(){
+  const modal = document.getElementById('modalBackdrop');
+  const dropdown = document.getElementById('responsibleDropdown');
+  const active = document.activeElement;
+  const editing = active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+  return (modal && modal.style.display === 'flex') ||
+         (dropdown && dropdown.classList.contains('open')) ||
+         editing;
+}
+function scheduleAutoRefresh(delay){
+  window.setTimeout(() => {
+    if(shouldDeferAutoRefresh()){
+      scheduleAutoRefresh(10000);
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('refresh', '1');
+    window.location.replace(url.toString());
+  }, delay);
+}
+scheduleAutoRefresh(AUTO_REFRESH_MS);
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{ ticket.ticket_number }} - Mensagens</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { --bg:#0b0f19; --panel:#121a2b; --panel-2:#0d1424; --line:#2a3a60; --line-2:#243252; --text:#e7eaf0; --muted:#a8b5c8; --blue:#2b63ff; --blue-2:#2a3a60; --red:#b72f4a; }
+    body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
+    .wrap { max-width: 1180px; margin:0 auto; padding:18px; }
+    h1 { margin:0 0 10px; font-size:24px; }
+    .card { background:var(--panel); border:1px solid var(--line-2); border-radius:14px; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.22); margin-bottom:14px; }
+    .top { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+    .ticket { font-size:20px; font-weight:850; }
+    .muted { color:var(--muted); }
+    .tag { font-size:12px; padding:4px 8px; border-radius:999px; background:var(--panel-2); border:1px solid var(--line); display:inline-block; }
+    .btn, button { background:var(--blue); border:none; color:white; padding:10px 12px; border-radius:12px; cursor:pointer; text-decoration:none; display:inline-block; font-size:14px; }
+    .btn.secondary, button.secondary { background:var(--blue-2); }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    label { display:block; font-size:12px; opacity:.9; margin-bottom:5px; }
+    input[type="text"], textarea { width:100%; border-radius:12px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); padding:10px; }
+    .row { display:grid; grid-template-columns: 1fr 1.3fr auto; gap:10px; align-items:end; }
+    .copy-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    details { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:10px; margin-top:10px; }
+    summary { cursor:pointer; font-weight:700; }
+    pre { white-space:pre-wrap; word-break:break-word; background:#070b13; border:1px solid var(--line-2); padding:10px; border-radius:12px; max-height:400px; overflow:auto; }
+    .field-grid { display:grid; grid-template-columns:220px 1fr; border:1px solid var(--line-2); border-radius:12px; overflow:hidden; }
+    .field-grid div { padding:9px 10px; border-bottom:1px solid var(--line-2); }
+    .field-grid div:nth-child(odd) { background:var(--panel-2); font-weight:700; }
+    .field-grid div:nth-child(even) { white-space:pre-wrap; word-break:break-word; }
+    .field-grid div:nth-last-child(-n+2) { border-bottom:none; }
+    .toast { display:none; position:fixed; right:16px; bottom:16px; background:#203055; border:1px solid var(--line); padding:10px 12px; border-radius:12px; color:var(--text); box-shadow:0 10px 30px rgba(0,0,0,.35); }
+    @media (max-width:800px){ .grid2,.row{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top" style="margin-bottom:12px;">
+    <div>
+      <h1>Mensagens do chamado</h1>
+      <div class="ticket">{{ ticket.ticket_number }}</div>
+      <div class="muted">{{ ticket.requester }} · <span class="tag">{{ ticket.v('category') or '-' }}</span> · <span class="tag">{{ ticket.status or '-' }}</span></div>
+    </div>
+    <div>
+      <a class="btn secondary" href="{{ return_to }}">Voltar para chamados</a>
+      {% if smartsheet_url %}<a class="btn secondary" target="_blank" rel="noopener" href="{{ smartsheet_url }}">Abrir no Smartsheet</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <form method="post" class="row">
+      <input type="hidden" name="return_to" value="{{ return_to }}" />
+      <div>
+        <label>Referência da discussão</label>
+        <input type="text" name="reference" value="{{ reference }}" placeholder="#discussao-xxx ou link" />
+      </div>
+      <div>
+        <label>Link da pesquisa de satisfação</label>
+        <input type="text" name="survey_link" value="{{ survey_link }}" placeholder="https://app.smartsheet.com/b/updaterequest?..." />
+      </div>
+      <button type="submit">Aplicar</button>
+    </form>
+    <div class="muted" style="margin-top:10px; font-size:13px;">
+      O link da pesquisa é tratado para não quebrar o Markdown do Rocket.Chat em URLs longas do Smartsheet.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="top">
+      <strong>Copiar mensagens</strong>
+      <button class="secondary" onclick="copyText('full-text')">Copiar tudo</button>
+    </div>
+    <div class="copy-row">
+      {% for key, val in sections.items() %}
+        <button class="secondary" onclick="copyText('sec-{{ loop.index }}')">{{ key }}</button>
+        <span id="sec-{{ loop.index }}" style="display:none;">{{ val }}</span>
+      {% endfor %}
+    </div>
+    <span id="full-text" style="display:none;">{{ full_text }}</span>
+
+    <details open>
+      <summary>Ver seções organizadas</summary>
+      {% for key, val in sections.items() %}
+        <details>
+          <summary>{{ key }}</summary>
+          <pre>{{ val }}</pre>
+        </details>
+      {% endfor %}
+    </details>
+  </div>
+
+  <div class="card">
+    <strong>Dados do chamado</strong>
+    <div class="field-grid" style="margin-top:10px;">
+      {% for label, value in ticket.detail_fields() %}
+        <div>{{ label }}</div><div>{{ value }}</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast">Copiado!</div>
+<script>
+function copyText(elementId){
+  const el = document.getElementById(elementId);
+  const text = el ? (el.textContent || '') : '';
+  if(!text){ return; }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(() => toast('Copiado!')).catch(() => legacyCopy(text));
+  } else { legacyCopy(text); }
+}
+function legacyCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('Copiado!'); } catch(e) {}
+  document.body.removeChild(ta);
+}
+let toastTimer;
+function toast(msg){
+  clearTimeout(toastTimer);
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  toastTimer = setTimeout(() => { t.style.display = 'none'; }, 1200);
+}
+</script>
+</body>
+</html>
