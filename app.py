@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover
 
 load_dotenv()
 
-APP_VERSION = "2026.05.21-r5"
+APP_VERSION = "2026.05.21-r7"
 SMARTSHEET_BASE_URL = os.getenv("SMARTSHEET_BASE_URL", "https://api.smartsheet.com/2.0").rstrip("/")
 SMARTSHEET_ACCESS_TOKEN = os.getenv("SMARTSHEET_ACCESS_TOKEN", "").strip()
 SMARTSHEET_SHEET_ID = os.getenv("SMARTSHEET_SHEET_ID", "").strip()
@@ -211,6 +211,16 @@ def get_alias_raw(cells: Dict[str, Any], key: str) -> Any:
         if column_name in cells and cells.get(column_name) is not None:
             return cells.get(column_name)
     return None
+
+
+def row_has_requester(cells: Dict[str, Any]) -> bool:
+    """Só considera ticket real quando o campo Enviado por/Solicitante existe.
+
+    A planilha pode ter linhas vazias, fórmulas ou separadores. Como todo chamado
+    válido exige Enviado por, linhas sem esse campo não entram na listagem, filtros
+    ou contadores.
+    """
+    return bool(get_alias_value(cells, "requester"))
 
 
 def smartsheet_url_for_row(row_id: Optional[str]) -> str:
@@ -757,6 +767,10 @@ def load_from_smartsheet() -> Tuple[List[Ticket], str]:
             if column_id in assigned_column_ids:
                 assigned_contacts = contacts_from_api_cell(cell)
 
+        # Linhas sem Enviado por/Solicitante não são tickets reais.
+        if not row_has_requester(cells):
+            continue
+
         uid = f"smartsheet-{row.get('id')}"
         tickets.append(Ticket(
             uid=uid,
@@ -780,8 +794,11 @@ def load_from_xlsx(path: str) -> Tuple[List[Ticket], str]:
     tickets: List[Ticket] = []
     for row_index, row in enumerate(rows_iter, start=2):
         cells = {headers[i]: row[i] for i in range(min(len(headers), len(row))) if headers[i]}
-        # Ignore completely blank rows.
+        # Ignore completely blank rows and non-ticket rows. Every valid ticket
+        # must have Enviado por/Solicitante filled.
         if not any(clean_str(value) for value in cells.values()):
+            continue
+        if not row_has_requester(cells):
             continue
         assigned_text = get_alias_value(cells, "assigned_to")
         contacts = []
@@ -912,20 +929,39 @@ def get_ticket_or_404(uid: str) -> Ticket:
     abort(404)
 
 
+def normalize_responsible_filter_value(value: str) -> str:
+    """Normaliza valores vindos da URL/.env para as chaves internas do filtro."""
+    raw = (value or "").strip()
+    norm = normalize_text(raw)
+    if norm in {"todos", "todo", "all", "__all__"}:
+        return "__all__"
+    if norm in {"nao atribuido", "nao atribuidos", "não atribuído", "não atribuídos", "unassigned", "__unassigned__"}:
+        return "__unassigned__"
+    return raw
+
+
 def get_selected_responsibles() -> List[str]:
-    values = [value.strip() for value in request.args.getlist("responsible") if value and value.strip()]
+    values = [
+        normalize_responsible_filter_value(value)
+        for value in request.args.getlist("responsible")
+        if value and value.strip()
+    ]
     if not values:
-        values = split_contact_text(DEFAULT_RESPONSIBLE) or ["__all__"]
+        values = [
+            normalize_responsible_filter_value(value)
+            for value in split_contact_text(DEFAULT_RESPONSIBLE)
+            if value and value.strip()
+        ] or ["__all__"]
     if "__all__" in values:
         return ["__all__"]
     # De-duplicate preserving order.
     seen = set()
     result: List[str] = []
     for value in values:
-        if value not in seen:
+        if value and value not in seen:
             result.append(value)
             seen.add(value)
-    return result
+    return result or ["__all__"]
 
 
 # ============================================================

@@ -94,11 +94,11 @@ Preencha:
 ```env
 SMARTSHEET_ACCESS_TOKEN=seu_token
 SMARTSHEET_SHEET_ID=id_da_planilha
-DEFAULT_RESPONSIBLE=vanderson.batalha@grupocertare.com
+DEFAULT_RESPONSIBLE=Todos
 SMARTSHEET_WEB_URL=https://app.smartsheet.com/sheets/4mxRwjJvcm57HJ6hwxcgVFhF799qcHM6FxMxw2C1?view=grid&newview=true&filterId=1922378880733060
 ```
 
-O `DEFAULT_RESPONSIBLE` é opcional. Ele abre o app já filtrado no responsável informado. Para abrir com mais de um responsável selecionado por padrão, separe os valores por ponto e vírgula, por exemplo: `Vanderson Batalha;vanderson.batalha@grupocertare.com`.
+O `DEFAULT_RESPONSIBLE` é opcional. Use `Todos` para abrir o app mostrando todos os chamados por padrão. Para abrir com um ou mais responsáveis selecionados por padrão, separe os valores por ponto e vírgula, por exemplo: `Vanderson Batalha;vanderson.batalha@grupocertare.com`.
 
 ### Opção 2: Teste local por XLSX
 
@@ -121,7 +121,7 @@ XLSX_FILE_PATH=C:\caminho\para\Abertura de chamado de TI.xlsx
 5. Depois de criado, vá em **Environment** e preencha as variáveis marcadas como secret/sync false:
    - `SMARTSHEET_ACCESS_TOKEN`
    - `SMARTSHEET_SHEET_ID`
-   - `DEFAULT_RESPONSIBLE`, opcional, exemplo: `Vanderson Batalha;vanderson.batalha@grupocertare.com`
+   - `DEFAULT_RESPONSIBLE`, opcional. Use `Todos` para abrir sem filtro de responsável ou informe nomes/e-mails separados por ponto e vírgula.
 6. Confirme também:
    - `SMARTSHEET_WEB_URL=https://app.smartsheet.com/sheets/4mxRwjJvcm57HJ6hwxcgVFhF799qcHM6FxMxw2C1?view=grid&newview=true&filterId=1922378880733060`
    - `CACHE_TTL_SECONDS=300`
@@ -144,7 +144,7 @@ APP_SECRET_KEY=gere-uma-chave-grande
 SMARTSHEET_ACCESS_TOKEN=seu_token
 SMARTSHEET_SHEET_ID=id_da_planilha
 SMARTSHEET_WEB_URL=https://app.smartsheet.com/sheets/4mxRwjJvcm57HJ6hwxcgVFhF799qcHM6FxMxw2C1?view=grid&newview=true&filterId=1922378880733060
-DEFAULT_RESPONSIBLE=Vanderson Batalha;vanderson.batalha@grupocertare.com
+DEFAULT_RESPONSIBLE=Todos
 CACHE_TTL_SECONDS=300
 ENABLE_SMARTSHEET_WRITE=false
 SMARTSHEET_BASE_URL=https://api.smartsheet.com/2.0
@@ -165,3 +165,8 @@ Rota de health check:
 ```text
 /healthz
 ```
+
+
+## Versão 2026.05.21-r7
+
+- Linhas sem **Enviado por** / **Solicitante** agora são ignoradas. Elas não aparecem na listagem, não entram nos filtros e não contam nos indicadores, pois não representam tickets reais.
