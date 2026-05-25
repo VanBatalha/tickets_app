@@ -47,6 +47,12 @@
     .stat b { display:block; font-size: 17px; line-height:1.05; }
     .stat span { display:block; font-size: 11px; line-height:1.2; margin-top: 4px; }
     .flash { background:#203055; border:1px solid var(--line); padding:10px; border-radius:12px; margin: 10px 0; }
+
+    .alert-panel { display:none; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; background:#3b2610; border:1px solid rgba(255,213,143,.75); padding:12px 14px; border-radius:14px; margin: 12px 0 14px; box-shadow:0 0 0 1px rgba(255,213,143,.16), 0 12px 35px rgba(0,0,0,.28); }
+    .alert-panel.show { display:flex; }
+    .alert-panel strong { color:#ffd58f; }
+    .alert-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .alert-status { font-size:12px; color:var(--muted); margin-top:6px; }
     .error { background:#3a1722; border-color:#7a3144; }
     .muted { color: var(--muted); }
 
@@ -110,6 +116,18 @@
       {% if messages %}<div class="flash">{{ messages[0] }}</div>{% endif %}
     {% endwith %}
     {% if error %}<div class="flash error"><b>Atenção:</b> {{ error }}</div>{% endif %}
+
+    <div class="alert-panel" id="newTicketAlert" role="status" aria-live="polite">
+      <div>
+        <strong>🚨 Novo chamado identificado</strong>
+        <div class="hint" id="newTicketAlertText">Há chamado novo no filtro atual.</div>
+        <div class="alert-status" id="browserAlertStatus"></div>
+      </div>
+      <div class="alert-actions">
+        <button type="button" onclick="enableBrowserAlerts()" class="secondary">Ativar alertas</button>
+        <button type="button" onclick="acknowledgeNewTicketAlert()">Marcar como visto</button>
+      </div>
+    </div>
 
     <div class="top">
       <div class="card">
@@ -262,6 +280,16 @@
   </div>
 
 <script>
+
+const APP_ALERT_VERSION = 'r8';
+const ALERT_TICKETS = {{ alert_tickets|tojson }};
+const ALERT_FILTER_KEY = {{ alert_filter_key|tojson }};
+const ORIGINAL_TITLE = document.title;
+const BASELINE_KEY = 'tiTicketsBaseline:' + APP_ALERT_VERSION + ':' + ALERT_FILTER_KEY;
+const PENDING_KEY = 'tiTicketsPendingNew:' + APP_ALERT_VERSION;
+const ALERTS_ENABLED_KEY = 'tiTicketsAlertsEnabled:' + APP_ALERT_VERSION;
+let titleBlinkTimer = null;
+let titleBlinkState = false;
 function toggleResponsibleDropdown(event){
   event.stopPropagation();
   document.getElementById('responsibleDropdown').classList.toggle('open');
@@ -320,6 +348,157 @@ function showDetails(details, ticket){
 function closeModal(){ document.getElementById('modalBackdrop').style.display = 'none'; }
 function hideDetails(event){ if(event.target.id === 'modalBackdrop') closeModal(); }
 document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeModal(); });
+
+
+function readJsonStorage(key, fallback){
+  try {
+    const raw = localStorage.getItem(key);
+    if(!raw){ return fallback; }
+    const value = JSON.parse(raw);
+    return Array.isArray(value) || typeof value === 'object' ? value : fallback;
+  } catch(e){ return fallback; }
+}
+function writeJsonStorage(key, value){
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) {}
+}
+function uniqueTickets(tickets){
+  const map = new Map();
+  (tickets || []).forEach(t => {
+    if(t && t.uid && !map.has(t.uid)){ map.set(t.uid, t); }
+  });
+  return Array.from(map.values());
+}
+function getPendingTickets(){
+  return uniqueTickets(readJsonStorage(PENDING_KEY, []));
+}
+function setPendingTickets(tickets){
+  writeJsonStorage(PENDING_KEY, uniqueTickets(tickets));
+}
+function updateBrowserAlertStatus(){
+  const el = document.getElementById('browserAlertStatus');
+  if(!el){ return; }
+  if(!('Notification' in window)){
+    el.textContent = 'Este navegador não oferece notificação nativa. O aviso na aba continuará funcionando.';
+    return;
+  }
+  if(Notification.permission === 'granted'){
+    el.textContent = 'Alertas do navegador ativos. O som depende da permissão do navegador após interação do usuário.';
+  } else if(Notification.permission === 'denied'){
+    el.textContent = 'Notificações bloqueadas neste navegador. Libere nas permissões do site para receber alertas fora da aba.';
+  } else {
+    el.textContent = 'Clique em Ativar alertas para permitir notificação do navegador e desbloquear o som.';
+  }
+}
+function showNewTicketAlert(tickets){
+  const pending = uniqueTickets(tickets || getPendingTickets());
+  const panel = document.getElementById('newTicketAlert');
+  const text = document.getElementById('newTicketAlertText');
+  if(!panel || !text || !pending.length){ return; }
+  const names = pending.slice(0, 4).map(t => t.ticket || t.uid).join(', ');
+  const extra = pending.length > 4 ? ` e mais ${pending.length - 4}` : '';
+  text.textContent = pending.length === 1
+    ? `O chamado ${names} apareceu no filtro atual.`
+    : `Os chamados ${names}${extra} apareceram no filtro atual.`;
+  panel.classList.add('show');
+  startTitleBlink(pending.length);
+  updateBrowserAlertStatus();
+}
+function startTitleBlink(count){
+  if(titleBlinkTimer){ return; }
+  titleBlinkTimer = window.setInterval(() => {
+    titleBlinkState = !titleBlinkState;
+    document.title = titleBlinkState ? `🚨 Novo chamado (${count})` : ORIGINAL_TITLE;
+  }, 1000);
+}
+function stopTitleBlink(){
+  if(titleBlinkTimer){
+    window.clearInterval(titleBlinkTimer);
+    titleBlinkTimer = null;
+  }
+  document.title = ORIGINAL_TITLE;
+}
+function acknowledgeNewTicketAlert(){
+  setPendingTickets([]);
+  const panel = document.getElementById('newTicketAlert');
+  if(panel){ panel.classList.remove('show'); }
+  stopTitleBlink();
+}
+function notifyBrowser(tickets){
+  if(!tickets || !tickets.length){ return; }
+  if(!('Notification' in window) || Notification.permission !== 'granted'){ return; }
+  const title = tickets.length === 1 ? 'Novo chamado de TI' : `${tickets.length} novos chamados de TI`;
+  const body = tickets.length === 1
+    ? `Chamado ${tickets[0].ticket || tickets[0].uid}`
+    : tickets.slice(0, 5).map(t => t.ticket || t.uid).join(', ');
+  try {
+    const notification = new Notification(title, { body, tag: 'ti-novo-chamado', requireInteraction: true });
+    notification.onclick = () => {
+      window.focus();
+      acknowledgeNewTicketAlert();
+      notification.close();
+    };
+  } catch(e) {}
+}
+function playAlertSound(){
+  if(localStorage.getItem(ALERTS_ENABLED_KEY) !== '1'){ return; }
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if(!AudioContext){ return; }
+    const ctx = new AudioContext();
+    const now = ctx.currentTime;
+    [0, 0.18, 0.36].forEach((offset) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now + offset);
+      gain.gain.setValueAtTime(0.001, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + offset + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.13);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + offset);
+      osc.stop(now + offset + 0.14);
+    });
+    window.setTimeout(() => ctx.close(), 900);
+  } catch(e) {}
+}
+function enableBrowserAlerts(){
+  localStorage.setItem(ALERTS_ENABLED_KEY, '1');
+  if('Notification' in window && Notification.permission === 'default'){
+    Notification.requestPermission().then(() => updateBrowserAlertStatus()).catch(() => updateBrowserAlertStatus());
+  } else {
+    updateBrowserAlertStatus();
+  }
+  playAlertSound();
+}
+function detectNewTickets(){
+  updateBrowserAlertStatus();
+  const currentTickets = uniqueTickets(ALERT_TICKETS || []);
+  const currentIds = currentTickets.map(t => t.uid);
+  const previousIds = readJsonStorage(BASELINE_KEY, null);
+  const existingPending = getPendingTickets();
+
+  if(!previousIds){
+    writeJsonStorage(BASELINE_KEY, currentIds);
+    if(existingPending.length){ showNewTicketAlert(existingPending); }
+    return;
+  }
+
+  const previousSet = new Set(previousIds);
+  const newTickets = currentTickets.filter(t => !previousSet.has(t.uid));
+  writeJsonStorage(BASELINE_KEY, currentIds);
+
+  if(newTickets.length){
+    const pending = uniqueTickets(existingPending.concat(newTickets));
+    setPendingTickets(pending);
+    showNewTicketAlert(pending);
+    notifyBrowser(newTickets);
+    playAlertSound();
+  } else if(existingPending.length){
+    showNewTicketAlert(existingPending);
+  }
+}
+detectNewTickets();
 
 const AUTO_REFRESH_MS = 60000;
 function shouldDeferAutoRefresh(){

@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover
 
 load_dotenv()
 
-APP_VERSION = "2026.05.21-r7"
+APP_VERSION = "2026.05.21-r8"
 SMARTSHEET_BASE_URL = os.getenv("SMARTSHEET_BASE_URL", "https://api.smartsheet.com/2.0").rstrip("/")
 SMARTSHEET_ACCESS_TOKEN = os.getenv("SMARTSHEET_ACCESS_TOKEN", "").strip()
 SMARTSHEET_SHEET_ID = os.getenv("SMARTSHEET_SHEET_ID", "").strip()
@@ -308,9 +308,9 @@ def survey_block(email: str, survey_link: Optional[str]) -> str:
         else:
             email_line = "O mesmo link também foi enviado para o e-mail informado no chamado, caso prefira acessá-lo por lá."
 
-        link = markdown_link("link", survey_link)
+        link = markdown_link("DESSE LINK", survey_link)
         return (
-            f"Se possível, pedimos que avalie este atendimento pelo {link}. "
+            f"Se possível, pedimos que avalie este atendimento através do {link}. "
             "A avaliação é rápida e muito importante para que possamos aprimorar continuamente nossos serviços e atendimento.\n\n"
             f"{email_line}\n\n"
             "Agradecemos pelo retorno, confiança e parceria! 😄"
@@ -1035,6 +1035,8 @@ def index():
         list_fields=LIST_FIELDS,
         enable_write=ENABLE_SMARTSHEET_WRITE,
         return_to=return_to,
+        alert_tickets=[{"uid": t.uid, "ticket": t.ticket_number} for t in filtered if not t.is_closed],
+        alert_filter_key="|".join([",".join(responsibles), status_filter, demand_type, normalize_text(search)]),
     )
 
 

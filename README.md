@@ -32,6 +32,22 @@ Aplicação Flask para consultar chamados da planilha do Smartsheet, filtrar por
 - A tela de mensagens reaproveita o cache já carregado, evitando reler o Smartsheet a cada clique em **Aplicar**.
 - Aceita **Referência da discussão** e **Link da pesquisa de satisfação** por chamado.
 - Trata links longos do Smartsheet para não quebrar o Markdown do Rocket.Chat.
+- Possui auto-refresh de 60 segundos e alerta de novo chamado com aviso na página, título da aba piscando, notificação do navegador e aviso sonoro quando habilitado pelo usuário.
+- Nas mensagens com pesquisa de satisfação, o hiperlink agora aparece como **DESSE LINK** para ficar mais chamativo no Rocket.Chat.
+
+
+## Alertas de novo chamado
+
+A tela compara os chamados visíveis no filtro atual a cada refresh automático. Quando surge um chamado novo, o app:
+
+- mostra um aviso fixo na própria página;
+- faz o título da aba alternar para **Novo chamado**;
+- dispara notificação do navegador, se o usuário tiver clicado em **Ativar alertas** e autorizado a permissão;
+- toca um aviso sonoro curto, quando o navegador permite áudio após interação do usuário.
+
+O aviso da página e o título piscando permanecem até clicar em **Marcar como visto**. A notificação nativa do navegador depende do comportamento do sistema operacional/navegador, mas foi configurada com `requireInteraction` quando suportado.
+
+Para receber alerta em outro navegador, a aplicação precisa estar aberta também nesse navegador e as notificações precisam estar permitidas nele.
 
 ## Ajustar tamanho dos campos na tela
 
@@ -166,6 +182,11 @@ Rota de health check:
 /healthz
 ```
 
+
+## Versão 2026.05.21-r8
+
+- Adicionado alerta de novo chamado com banner persistente, título da aba piscando, notificação do navegador e aviso sonoro após habilitação do usuário.
+- Mensagens com link de pesquisa passaram a usar o texto **DESSE LINK** como hiperlink.
 
 ## Versão 2026.05.21-r7
 
